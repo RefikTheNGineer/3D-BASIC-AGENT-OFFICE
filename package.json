@@ -1,0 +1,29 @@
+{
+  "name": "agent-3d-office",
+  "displayName": "3D Agent Team Office",
+  "description": "Tester, Reviewer ve Fixer ajanlarını 3D sahnede canlı izle ve tıklayarak soru sor.",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": ["Visualization"],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "agent3d.openOffice",
+        "title": "3D Ajan Ofisini Aç"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.95.0",
+    "typescript": "^5.4.0"
+  }
+}

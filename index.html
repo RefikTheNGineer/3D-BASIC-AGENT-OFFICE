@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D AI Agent Team Office | VS Code Copilot</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #121218; font-family: 'Segoe UI', sans-serif; color: #fff; }
+        #top-bar {
+            position: absolute; top: 15px; left: 15px; right: 15px;
+            display: flex; gap: 10px; z-index: 10; align-items: stretch;
+        }
+        .agent-box {
+            flex: 1; background: rgba(25, 28, 40, 0.9); border: 1px solid #3a415a;
+            border-radius: 8px; padding: 12px; cursor: pointer; transition: 0.2s;
+        }
+        .agent-box:hover { border-color: #60a5fa; transform: translateY(-2px); }
+        .agent-box h3 { margin: 0 0 5px 0; font-size: 14px; }
+        .agent-box p { margin: 0; font-size: 12px; color: #9ca3af; }
+        #lang-switch {
+            background: #1e2230; border: 1px solid #4b5563; color: #fff;
+            border-radius: 8px; padding: 0 16px; cursor: pointer; font-weight: bold;
+            font-size: 13px; transition: 0.2s;
+        }
+        #lang-switch:hover { background: #3b82f6; border-color: #3b82f6; }
+        #chat-modal {
+            display: none; position: fixed; bottom: 25px; left: 50%; transform: translateX(-50%);
+            background: #1e2230; border: 1px solid #4b5563; border-radius: 10px;
+            padding: 16px; width: 85%; max-width: 520px; z-index: 20; box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+        }
+        #chat-modal input {
+            width: 100%; box-sizing: border-box; padding: 10px; margin: 10px 0;
+            background: #11131a; border: 1px solid #374151; color: #fff; border-radius: 6px;
+        }
+        #chat-modal button {
+            padding: 9px 14px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;
+        }
+        .btn-copy { background: #3b82f6; color: white; }
+        .btn-close { background: #374151; color: white; margin-left: 6px; }
+        #footer-hint {
+            position: absolute; bottom: 12px; width: 100%; text-align: center;
+            font-size: 12px; color: #6b7280; pointer-events: none;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+    <div id="top-bar">
+        <div class="agent-box" onclick="selectAgent('tester')">
+            <h3 style="color:#60a5fa;" id="title-tester">🔵 TESTER (QA Engineer)</h3>
+            <p id="st-tester">Status: Idle (Click to ask)</p>
+        </div>
+        <div class="agent-box" onclick="selectAgent('reviewer')">
+            <h3 style="color:#c084fc;" id="title-reviewer">🟣 REVIEWER (Code Auditor)</h3>
+            <p id="st-reviewer">Status: Idle (Click to ask)</p>
+        </div>
+        <div class="agent-box" onclick="selectAgent('fixer')">
+            <h3 style="color:#fb923c;" id="title-fixer">🟠 FIXER (Senior Developer)</h3>
+            <p id="st-fixer">Status: Idle (Click to ask)</p>
+        </div>
+        <button id="lang-switch" onclick="toggleLang()">TR / EN</button>
+    </div>
+
+    <div id="chat-modal">
+        <strong id="modal-title">Agent Selected</strong>
+        <input type="text" id="question-input" placeholder="Ask a question...">
+        <button class="btn-copy" id="btn-copy-text" onclick="copyCommand()">Copy Prompt for Copilot Chat</button>
+        <button class="btn-close" id="btn-close-text" onclick="closeModal()">Close</button>
+        <p id="copy-msg" style="font-size:11px; color:#4ade80; margin-top:8px; display:none;"></p>
+    </div>
+
+    <div id="footer-hint">Click on any 3D agent character to assign a task or ask a question</div>
+
+    <script>
+        let currentLang = 'en';
+
+        const i18n = {
+            en: {
+                testerTitle: "🔵 TESTER (QA Engineer)",
+                reviewerTitle: "🟣 REVIEWER (Code Auditor)",
+                fixerTitle: "🟠 FIXER (Senior Developer)",
+                idle: "Status: Idle (Click to ask)",
+                active: "Status: Selected & Ready",
+                modalPrefix: "Ask ",
+                placeholder: "Type your question (e.g., Check for bugs in the project)...",
+                copyBtn: "Copy Prompt for Copilot Chat",
+                closeBtn: "Close",
+                copied: "Copied! Paste it into VS Code Copilot Chat (Ctrl+V).",
+                hint: "Click on any 3D agent character to assign a task or ask a question",
+                defaultQ: "Inspect the project and report any issues.",
+                promptTemplate: (role, q) => `Act according to .github/chatmodes/${role}.chatmode.md and answer: ${q}`
+            },
+            tr: {
+                testerTitle: "🔵 TESTER (Test Uzmanı)",
+                reviewerTitle: "🟣 REVIEWER (Kod Denetçisi)",
+                fixerTitle: "🟠 FIXER (Hata Düzeltici)",
+                idle: "Durum: Beklemede (Soru sormak için tıkla)",
+                active: "Durum: Seçildi ve Hazır",
+                modalPrefix: "Soru Sor: ",
+                placeholder: "Sorunu yaz (Örn: Hangi dosyalarda hata var?)...",
+                copyBtn: "Komutu Kopyala (Copilot Chat'e Yapıştır)",
+                closeBtn: "Kapat",
+                copied: "Kopyalandı! Şimdi VS Code Copilot Chat'e yapıştır (Ctrl+V).",
+                hint: "Görev vermek veya soru sormak için 3D karakterin üzerine tıkla",
+                defaultQ: "Projeyi kontrol et ve hataları raporla.",
+                promptTemplate: (role, q) => `.github/chatmodes/${role}.chatmode.md rolüne göre cevapla: ${q}`
+            }
+        };
+
+        function toggleLang() {
+            currentLang = currentLang === 'en' ? 'tr' : 'en';
+            updateTexts();
+        }
+
+        function updateTexts() {
+            const t = i18n[currentLang];
+            document.getElementById('title-tester').innerText = t.testerTitle;
+            document.getElementById('title-reviewer').innerText = t.reviewerTitle;
+            document.getElementById('title-fixer').innerText = t.fixerTitle;
+            ['tester', 'reviewer', 'fixer'].forEach(id => {
+                document.getElementById('st-' + id).innerText = (selectedRole === id) ? t.active : t.idle;
+            });
+            document.getElementById('question-input').placeholder = t.placeholder;
+            document.getElementById('btn-copy-text').innerText = t.copyBtn;
+            document.getElementById('btn-close-text').innerText = t.closeBtn;
+            document.getElementById('footer-hint').innerText = t.hint;
+            if (selectedRole) {
+                document.getElementById('modal-title').innerText = t.modalPrefix + selectedRole.toUpperCase();
+            }
+        }
+
+        // Three.js 3D Sahne
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x121218);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 5, 9);
+        camera.lookAt(0, 1, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+        const light = new THREE.DirectionalLight(0xffffff, 0.8);
+        light.position.set(5, 10, 7);
+        scene.add(light);
+
+        scene.add(new THREE.GridHelper(14, 14, 0x334155, 0x1e293b));
+
+        const agents = {};
+        const clickTargets = [];
+
+        function makeAgent(id, x, color) {
+            const group = new THREE.Group();
+            group.position.set(x, 0, 0);
+
+            const desk = new THREE.Mesh(
+                new THREE.BoxGeometry(2, 0.12, 1.1),
+                new THREE.MeshStandardMaterial({ color: 0x262a3a })
+            );
+            desk.position.set(0, 0.8, 0.5);
+            group.add(desk);
+
+            const screen = new THREE.Mesh(
+                new THREE.BoxGeometry(1, 0.6, 0.08),
+                new THREE.MeshStandardMaterial({ color: 0x0f172a, emissive: color, emissiveIntensity: 0.4 })
+            );
+            screen.position.set(0, 1.25, 0.45);
+            group.add(screen);
+
+            const body = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.35, 0.45, 1.1, 16),
+                new THREE.MeshStandardMaterial({ color: color })
+            );
+            body.position.set(0, 0.9, -0.3);
+            body.userData = { id };
+            group.add(body);
+            clickTargets.push(body);
+
+            const head = new THREE.Mesh(
+                new THREE.SphereGeometry(0.32, 20, 20),
+                new THREE.MeshStandardMaterial({ color: 0xf2d2bd })
+            );
+            head.position.set(0, 1.7, -0.3);
+            head.userData = { id };
+            group.add(head);
+            clickTargets.push(head);
+
+            scene.add(group);
+            agents[id] = { body, head, screen, active: false };
+        }
+
+        makeAgent('tester', -3, 0x3b82f6);
+        makeAgent('reviewer', 0, 0xa855f7);
+        makeAgent('fixer', 3, 0xf97316);
+
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const hits = raycaster.intersectObjects(clickTargets);
+            document.body.style.cursor = hits.length > 0 ? 'pointer' : 'default';
+        });
+
+        window.addEventListener('click', (e) => {
+            if (e.target.tagName !== 'CANVAS') return;
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const hits = raycaster.intersectObjects(clickTargets);
+            if (hits.length > 0) selectAgent(hits[0].object.userData.id);
+        });
+
+        let selectedRole = '';
+        function selectAgent(id) {
+            selectedRole = id;
+            Object.values(agents).forEach(a => a.active = false);
+            agents[id].active = true;
+            updateTexts();
+            document.getElementById('copy-msg').style.display = 'none';
+            document.getElementById('chat-modal').style.display = 'block';
+        }
+
+        function closeModal() {
+            selectedRole = '';
+            Object.values(agents).forEach(a => a.active = false);
+            updateTexts();
+            document.getElementById('chat-modal').style.display = 'none';
+        }
+
+        function copyCommand() {
+            const t = i18n[currentLang];
+            const q = document.getElementById('question-input').value || t.defaultQ;
+            const text = t.promptTemplate(selectedRole, q);
+            navigator.clipboard.writeText(text);
+            const msgEl = document.getElementById('copy-msg');
+            msgEl.innerText = t.copied;
+            msgEl.style.display = 'block';
+        }
+
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            const t = clock.getElapsedTime();
+            Object.values(agents).forEach((ag, i) => {
+                const speed = ag.active ? 8 : 2;
+                const amp = ag.active ? 0.14 : 0.03;
+                ag.body.position.y = 0.9 + Math.abs(Math.sin(t * speed + i)) * amp;
+                ag.head.position.y = 1.7 + Math.abs(Math.sin(t * speed + i)) * amp;
+            });
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
