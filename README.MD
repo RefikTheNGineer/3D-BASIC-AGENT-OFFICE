@@ -2,7 +2,7 @@
 
 An interactive **3D Three.js Web Office** and modular **VS Code Copilot Agent Team** (`Tester`, `Reviewer`, `Fixer`) designed for automated code testing, auditing, and bug-fixing workflows.
 
-🌐 **Live 3D Demo:** [https://RefikTheNGineer.github.io/3D-BASIC-AGENT-OFFICE/](https://RefikTheNGineer.github.io/3D-BASIC-AGENT-OFFICE/)
+🌐 **Live 3D Demo:** https://earnest-donut-979bb8.netlify.app
 
 ---
 
